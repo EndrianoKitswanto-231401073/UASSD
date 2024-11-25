@@ -42,18 +42,119 @@ struct Barang {
         : namaBarang(namaBarang), jenisBarang(jenisBarang), waktuTersedia(waktuTersedia), harga(harga), item(item) {}
 };
 
-// Global variables for array-based item management
-const int MAX_BARANG = 100;  // Maximum number of items
-Barang barangArray[MAX_BARANG]; // Semua barang eksportir ada disini
-int jumlahBarang = 0;  // Current number of items
-vector<Barang> barangUser; // List barang disini lebih personal untuk tiap usernya
+struct Pesanan {
+    Barang barang;
+    int jumlahDipesan;
+    string pemesan;
+    string asal_pemesan;
+    string status; // pending atau kirim
+};
+
+const int MAX_BARANG = 100;  // Kapasitas maksimum barang
+Barang barangArray[MAX_BARANG]; // Array barang global
+int jumlahBarang = 0;  // Jumlah barang yang tersedia saat ini
+
+vector<Pesanan> daftarPesanan; // Vektor global untuk menyimpan pesanan
 string userNow;
 string asalNow;
+vector<Barang> barangUser; // List barang personal untuk user eksportir
+vector<Pesanan> pesananUser; //List barang personan untuk user importir
 
-// Function declarations for array-based Barang management
-void tambahBarang();
-void ubahBarang();
-void lihatStokBarang();
+void pesanBarang() {
+    cout << "\nPesan Barang\n======================\n";
+
+    // Tampilkan daftar barang yang tersedia
+    if (jumlahBarang == 0) {
+        cout << "[INFO] Tidak ada barang yang tersedia saat ini.\n";
+        return;
+    }
+
+    for (int i = 0; i < jumlahBarang; i++) {
+        cout << i + 1 << ". (" << barangArray[i].jenisBarang << ") "
+             << barangArray[i].namaBarang << " - "
+             << barangArray[i].pemilik << " - "
+             << barangArray[i].asal << endl;
+    }
+
+    int pilihan;
+    cout << "\nBarang yang ingin dipesan (nomor): ";
+    cin >> pilihan;
+
+    if (pilihan < 1 || pilihan > jumlahBarang) {
+        cout << "\n[ERROR] Pilihan tidak valid!\n";
+        return;
+    }
+
+    Barang barangDipilih = barangArray[pilihan - 1];
+
+    cout << "\nDetail Barang:\n";
+    cout << "Nama barang: " << barangDipilih.namaBarang << endl;
+    cout << "Jenis barang: " << barangDipilih.jenisBarang << endl;
+    cout << "Waktu tersedia: " << barangDipilih.waktuTersedia << endl;
+    cout << "Harga: $" << barangDipilih.harga << endl;
+    cout << "Item: " << barangDipilih.item << endl;
+    pesanBarang:
+    int jumlahDipesan;
+    cout << "\nJumlah item yang ingin dipesan: ";
+    cin >> jumlahDipesan;
+
+    if (jumlahDipesan > barangDipilih.item || jumlahDipesan <= 0) {
+        cout << "\n[ERROR] Jumlah tidak valid atau stok tidak mencukupi!\n";
+        goto pesanBarang;
+    }
+
+    char konfirmasi;
+    cout << "Apakah Anda yakin ingin memesan? (Y/N): ";
+    cin >> konfirmasi;
+
+    if (konfirmasi == 'Y' || konfirmasi == 'y') {
+        barangArray[pilihan - 1].item -= jumlahDipesan; // Kurangi stok
+        daftarPesanan.push_back({barangDipilih, jumlahDipesan, userNow, asalNow ,"pending"});
+        pesananUser.push_back(daftarPesanan[daftarPesanan.size()-1]);
+        cout << "\n[SUCCESS] Pesanan berhasil dibuat!\n";
+    } else {
+        cout << "\n[INFO] Pesanan dibatalkan.\n";
+    }
+}
+
+void daftarPemesanan() {
+    cout << "\nDaftar Pemesanan\n======================\n";
+
+    if (pesananUser.empty()) {
+        cout << "[INFO] Belum ada pesanan yang dibuat.\n";
+        return;
+    }
+
+    for (size_t i = 0; i < pesananUser.size(); i++) {
+        cout << i + 1 << ". (" << pesananUser[i].barang.jenisBarang << ") "
+             << pesananUser[i].barang.namaBarang << " - "
+             << pesananUser[i].barang.pemilik << " - "
+             << pesananUser[i].barang.asal << " (" 
+             << pesananUser[i].status << ")\n";
+    }
+
+    int pilihan;
+    cout << "\nDetail pesanan (nomor): ";
+    cin >> pilihan;
+
+    if (pilihan < 1 || pilihan > pesananUser.size()) {
+        cout << "\n[ERROR] Pilihan tidak valid!\n";
+        return;
+    }
+
+    Pesanan pesananDipilih = daftarPesanan[pilihan - 1];
+    cout << "\nDetail Pesanan:\n";
+    cout << "Eksportir: " << pesananDipilih.barang.pemilik << endl;
+    cout << "Negara: " << pesananDipilih.barang.asal << endl;
+    cout << "Status pengiriman: " << pesananDipilih.status << endl;
+    cout << "Nama barang: " << pesananDipilih.barang.namaBarang << endl;
+    cout << "Jenis barang: " << pesananDipilih.barang.jenisBarang << endl;
+    cout << "Waktu tersedia: " << pesananDipilih.barang.waktuTersedia << endl;
+    cout << "Harga: $" << pesananDipilih.barang.harga << endl;
+    cout << "Jumlah item yang dipesan: " << pesananDipilih.jumlahDipesan << endl;
+    cout << "\nTekan <Enter> untuk kembali "; getchar();
+}
+
 
 // User management functions (unchanged)
 void registerUser(User*& head, string nama, string username, string password, string role, string asalNegara) {
@@ -84,7 +185,6 @@ User* findUser(User* head, string username) {
         if (temp->username == username) {
             userNow = temp->nama;
             asalNow = temp->asalNegara;
-            SinkronBarangUser(userNow);
             return temp;
         }
         temp = temp->next;
@@ -96,6 +196,13 @@ void SinkronBarangUser(string nama){
     barangUser.clear();
     for(int i=0; i<jumlahBarang; i++){
         if(barangArray[i].pemilik == nama) barangUser.push_back(barangArray[i]);
+    }
+}
+
+void SinkronPesananUser(string nama){
+    pesananUser.clear();
+    for(int i=0; i<daftarPesanan.size(); i++){
+        if(daftarPesanan[i].pemesan == nama) pesananUser.push_back(daftarPesanan[i]);
     }
 }
 
@@ -305,10 +412,10 @@ void menuImportir(User* user, bool& isLoggedIn) {
 
         switch (choice) {
             case 1:
-                cout << "\n[Fitur pesan barang belum diimplementasikan]" << endl;
+                pesanBarang();
                 break;
             case 2:
-                cout << "\n[Fitur daftar pemesanan belum diimplementasikan]" << endl;
+                daftarPemesanan();
                 break;
             case 3:
                 cout << "\n[Fitur cek status pengiriman belum diimplementasikan]" << endl;
@@ -332,8 +439,10 @@ bool login(User* head, string username, string password) {
         system("cls");
         bool isLoggedIn = true;
         if (user->role == "eksportir") {
+            SinkronBarangUser(userNow);
             menuEksportir(user, isLoggedIn);
         } else {
+            SinkronPesananUser(userNow);
             menuImportir(user, isLoggedIn);
         }
         return isLoggedIn;
