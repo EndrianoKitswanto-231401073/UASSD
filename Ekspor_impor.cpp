@@ -3,6 +3,9 @@
 #include <vector>
 #include <algorithm>
 #include <cstdlib>
+#include <list>
+#include <ctime>
+#include <stack>
 using namespace std;
 
 // Forward declarations
@@ -29,6 +32,7 @@ public:
 
 // Barang structure definition (modified for array usage)
 struct Barang {
+    int id;
     string namaBarang;
     string jenisBarang;
     string waktuTersedia;
@@ -48,6 +52,7 @@ struct Pesanan {
     string pemesan;
     string asal_pemesan;
     string status; // pending atau kirim
+    string estimasi;
 };
 
 const int MAX_BARANG = 100;  // Kapasitas maksimum barang
@@ -59,8 +64,71 @@ string userNow;
 string asalNow;
 vector<Barang> barangUser; // List barang personal untuk user eksportir
 vector<Pesanan> pesananUser; //List barang personan untuk user importir
+vector<Pesanan> pesananEkspor; //List barang personal daftar pemesanan  di akun eksportir
+vector<Pesanan> kirimPesanan;
+stack<Barang> tempBarang;
+
+
+class HashTable {
+private:
+    int SIZE;
+    list<Pesanan>* table;
+
+    int hashFunction(int key) {
+        return key % SIZE;
+    }
+public:
+    HashTable(int size) {
+        SIZE = size;
+        table = new list<Pesanan>[SIZE];
+    }
+
+    void insert(Pesanan pesanan) {
+        int index = hashFunction(pesanan.barang.id); // Menggunakan `item` sebagai key
+        table[index].push_back(pesanan);
+    }
+
+    bool search(string namaBarang) {
+        for (int i = 0; i < SIZE; i++) {
+            for (const Pesanan& pesanan : table[i]) {
+                if (pesanan.barang.namaBarang == namaBarang && pesanan.status != "pending") {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void kosongHash() {
+        for (int i = 0; i < SIZE; i++) {
+            table[i].clear();
+        }
+    }
+
+    void display() {
+        int count = 0;
+        for (int i = 0; i < SIZE; i++) {
+            for (const Pesanan& pesanan : table[i]) {
+                count++;
+              //  cout << count << ". (" << pesanan.barang.jenisBarang << " (Jumlah: " << pesanan.jumlahDipesan << ")";
+                cout << count << ". (" << pesanan.barang.jenisBarang << ") "
+                << pesanan.barang.namaBarang << " - "
+                << pesanan.barang.pemilik << " - "
+                << pesanan.barang.asal << endl;
+            }
+        }
+    }
+
+    ~HashTable() {
+        delete[] table;
+    }
+};
+
+HashTable hashTable(100);
+
 
 void pesanBarang() {
+    system("cls");
     cout << "\nPesan Barang\n======================\n";
 
     // Tampilkan daftar barang yang tersedia
@@ -206,8 +274,29 @@ void SinkronPesananUser(string nama){
     }
 }
 
+void SinkronDaftarPesanan(string nama){
+    pesananEkspor.clear();
+    for(int i=0; i<daftarPesanan.size(); i++){
+        if(daftarPesanan[i].barang.pemilik == nama ) pesananEkspor.push_back(daftarPesanan[i]);
+    }
+}
+
+void SinkronKirimPesanan(string nama){
+    kirimPesanan.clear();
+    for(int i=0; i<daftarPesanan.size(); i++){
+        if(daftarPesanan[i].barang.pemilik == nama && daftarPesanan[i].status == "pending") kirimPesanan.push_back(daftarPesanan[i]);
+    }
+}
+
+void SinkronCekStatus(){
+    hashTable.kosongHash();
+    for(int i=0; i<pesananUser.size(); i++) hashTable.insert(pesananUser[i]);
+}
+
 // Implementasi fungsi tambahBarang dengan array
 void tambahBarang() {
+    srand(time(0));
+    while(!tempBarang.empty())tempBarang.pop();
     if (jumlahBarang >= MAX_BARANG) {
         cout << "\n[ERROR] Kapasitas penyimpanan barang penuh!" << endl;
         return;
@@ -215,6 +304,7 @@ void tambahBarang() {
 
     char pilihan;
     do {
+        
         system("cls");
         cout << "\nMenambah barang\n";
         cout << "=========================\n";
@@ -238,14 +328,53 @@ void tambahBarang() {
         cout << "Item: ";
         cin >> barangArray[jumlahBarang].item;
         cin.ignore();
+        barangArray[jumlahBarang].id = rand() % 1000 + 1;
         barangArray[jumlahBarang].pemilik = userNow;
         barangArray[jumlahBarang].asal = asalNow;
         barangUser.push_back(barangArray[jumlahBarang]);
         jumlahBarang++;
 
+        pilih:
         cout << "\nTambah barang lagi (Y/N)? ";
         cin >> pilihan;
         cin.ignore();
+        if(toupper(pilihan) == 'U'){
+            system("cls");
+            int lastIndex = barangUser.size()-1;
+            tempBarang.push(barangUser[lastIndex]);
+            for(int i=0; i<jumlahBarang; i++){
+                if(barangArray[i].namaBarang == barangUser[lastIndex].namaBarang){
+                     // Geser elemen-elemen setelahnya untuk menutupi slot yang dihapus
+                for (int j = i; j < jumlahBarang - 1; j++) {
+                    barangArray[j] = barangArray[j + 1];
+                }
+
+                jumlahBarang--; // Kurangi jumlahBarang karena satu elemen dihapus
+                break;
+                    }
+            }
+            barangUser.pop_back();
+            for (int i = 0; i < barangUser.size(); i++) {
+                cout << (i + 1) << ". (" << barangUser[i].jenisBarang << ") " 
+                    << barangUser[i].namaBarang << endl;
+            }
+            goto pilih;
+        }else if(toupper(pilihan) == 'R'){
+            system("cls");
+            if(tempBarang.empty()){
+                cout << "Anda belum melakukan Undo ";getchar();
+                goto pilih;
+            }
+            barangUser.push_back(tempBarang.top());
+            barangArray[jumlahBarang] = tempBarang.top();
+            tempBarang.pop();
+            for (int i = 0; i < barangUser.size(); i++) {
+            cout << (i + 1) << ". (" << barangUser[i].jenisBarang << ") " 
+                 << barangUser[i].namaBarang << endl;
+            }
+            jumlahBarang++;
+            goto pilih;
+        }
     } while (toupper(pilihan) == 'Y' && jumlahBarang < MAX_BARANG);
 }
 
@@ -346,6 +475,136 @@ void lihatStokBarang() {
     }
 }
 
+void daftarpesanan(){
+    SinkronDaftarPesanan(userNow);
+    if (pesananEkspor.size() == 0) {
+        cout << "\n[INFO] Tidak ada pesanan.\n";
+        return;
+    }
+    system("cls");
+    sortingJenis();
+    cout << "\nDaftar Pesanan\n";
+    cout << "=========================\n";
+    for (int i = 0; i < pesananEkspor.size(); i++) {
+        //int idx = indices[i];
+        cout << (i + 1) << ". (" << pesananEkspor[i].barang.jenisBarang << ") " << 
+        pesananEkspor[i].barang.namaBarang << " - " <<
+        pesananEkspor[i].pemesan << " - " <<
+        pesananEkspor[i].asal_pemesan << endl;
+    }
+
+    cout << " \nLihat detail data pesanan: ";
+    int choice;
+    cin >> choice;
+    cin.ignore();
+
+    if(choice > 0 && choice <= pesananEkspor.size()) {
+        int idx = choice - 1;
+        cout << "\nDetail Pesanan:\n";
+        cout << "nama pemesan: " << pesananEkspor[idx].pemesan << endl;
+        cout << "asal negara: " << pesananEkspor[idx].asal_pemesan << endl;
+        cout << "nama barang: " << pesananEkspor[idx].barang.namaBarang << endl;
+        cout << "jenis barang: " << pesananEkspor[idx].barang.jenisBarang << endl;
+        cout << "waktu pemesanan: " << pesananEkspor[idx].barang.waktuTersedia << endl;
+        cout << "harga: $" << pesananEkspor[idx].barang.harga << endl;
+        cout << "item: " << pesananEkspor[idx].jumlahDipesan << endl;
+    }
+}
+
+
+void kirimpesanan(){
+    // static int pesanan = 0;
+    SinkronKirimPesanan(userNow);
+    if (kirimPesanan.empty()) {
+        cout << "\n[INFO] Tidak ada pesanan.\n";
+        return;
+    }
+    system("cls");
+    sortingJenis();
+    cout << "\nKirim Pesanan\n";
+    cout << "=========================\n";
+    for (int i = 0; i < kirimPesanan.size(); i++) {
+        //int idx = indices[i];
+        cout << i+1 << ". (" << kirimPesanan[i].barang.jenisBarang << ") " << 
+        kirimPesanan[i].barang.namaBarang << " - " <<
+        kirimPesanan[i].pemesan << " - " <<
+        kirimPesanan[i].asal_pemesan << endl;
+    }
+
+    cout << "Kirim pesanan pertama? (Y/n) ";
+    char choice;
+    cin >> choice;
+    cin.ignore();
+
+    if (toupper(choice) == 'Y'){
+        cout << "Masukkan Estimasi Sampe : ";
+        getline(cin ,kirimPesanan[0].estimasi);
+        for(int i=0; i<daftarPesanan.size(); i++) {
+            if(daftarPesanan[i].barang.namaBarang == kirimPesanan[0].barang.namaBarang){
+                daftarPesanan[i].status = "Dikirim";
+                daftarPesanan[i].estimasi = kirimPesanan[0].estimasi;
+            }
+                
+        }
+    }
+    else {
+        cout << "[INFO] Pesanan tidak dikirim.\n";
+    }
+}
+
+void daftarpengiriman(){
+    SinkronDaftarPesanan(userNow);
+    if (pesananEkspor.size() == 0) {
+        cout << "\n[INFO] Tidak ada pesanan.\n";
+        return;
+    }
+
+    system("cls");
+    sortingJenis();
+    cout << "\nDaftar Pengiriman\n";
+    cout << "=========================\n";
+    for (int i = 0; i < pesananEkspor.size(); i++) {
+        //int idx = indices[i];
+        cout << (i + 1) << ". (" << pesananEkspor[i].barang.jenisBarang << ") " << 
+        pesananEkspor[i].barang.namaBarang << " - " <<
+        pesananEkspor[i].pemesan << " - " <<
+        pesananEkspor[i].asal_pemesan << "(" <<
+        pesananEkspor[i].status << ")\n";
+    }
+
+    cout << " \nLihat detail data pesanan: ";
+    int choice;
+    cin >> choice;
+    cin.ignore();
+
+    if(choice > 0 && choice <= pesananEkspor.size()) {
+        int idx = choice - 1;
+        cout << "\nDetail Pesanan:\n";
+        cout << "nama pemesan: " << pesananEkspor[idx].pemesan << endl;
+        cout << "asal negara: " << pesananEkspor[idx].asal_pemesan << endl;
+        cout << "nama barang: " << pesananEkspor[idx].barang.namaBarang << endl;
+        cout << "jenis barang: " << pesananEkspor[idx].barang.jenisBarang << endl;
+        cout << "waktu pemesanan: " << pesananEkspor[idx].barang.waktuTersedia << endl;
+        cout << "harga: $" << pesananEkspor[idx].barang.harga << endl;
+        cout << "item: " << pesananEkspor[idx].jumlahDipesan << endl;
+        cout << "estimasi: " << pesananEkspor[idx].estimasi << endl;
+    }    
+}
+
+void cekStatus(){
+    system("cls");
+    cout << "Cek Status Pengiriman " << endl;
+    SinkronCekStatus();
+    hashTable.display();
+    int chose;
+    cout << "Input data yang ingin dicek: "; cin >> chose;
+
+    if(hashTable.search(pesananUser[chose-1].barang.namaBarang)){
+        cout << "Barang sedang dikirim"; getchar();
+    }else{
+        cout << "Barang masih pending";getchar();
+    }
+}
 // Implementasi menuEksportir
 void menuEksportir(User* user, bool& isLoggedIn) {
     int choice;
@@ -375,13 +634,13 @@ void menuEksportir(User* user, bool& isLoggedIn) {
                 lihatStokBarang();
                 break;
             case 4:
-                cout << "\n[Fitur daftar pesanan belum diimplementasikan]" << endl;
+                daftarpesanan();
                 break;
             case 5:
-                cout << "\n[Fitur kirim pesanan belum diimplementasikan]" << endl;
+                kirimpesanan();
                 break;
             case 6:
-                cout << "\n[Fitur daftar pengiriman belum diimplementasikan]" << endl;
+                daftarpengiriman();
                 break;
             case 7:
                 cout << "\n[INFO] Logout berhasil!" << endl;
@@ -418,7 +677,7 @@ void menuImportir(User* user, bool& isLoggedIn) {
                 daftarPemesanan();
                 break;
             case 3:
-                cout << "\n[Fitur cek status pengiriman belum diimplementasikan]" << endl;
+                cekStatus();
                 break;
             case 4:
                 cout << "\n[INFO] Logout berhasil!" << endl;
@@ -440,6 +699,8 @@ bool login(User* head, string username, string password) {
         bool isLoggedIn = true;
         if (user->role == "eksportir") {
             SinkronBarangUser(userNow);
+            SinkronDaftarPesanan(userNow);
+            
             menuEksportir(user, isLoggedIn);
         } else {
             SinkronPesananUser(userNow);
